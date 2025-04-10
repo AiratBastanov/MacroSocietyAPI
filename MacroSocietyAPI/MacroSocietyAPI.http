@@ -1,0 +1,6 @@
+@MacroSocietyAPI_HostAddress = http://localhost:5105
+
+GET {{MacroSocietyAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
