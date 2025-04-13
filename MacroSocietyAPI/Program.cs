@@ -1,14 +1,16 @@
 using MacroSocietyAPI.EmailServies;
 using MacroSocietyAPI.Models;
 using MacroSocietyAPI.Randoms;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
 // Подключаем DbContext с конфигурацией из appsettings.json
 builder.Services.AddDbContext<MacroSocietyDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+/*builder.Services.AddDbContext<MacroSocietyDbContext>();*/
 
 // Регистрируем EmailService и другие зависимости
 builder.Services.AddScoped<EmailService>();
@@ -25,9 +27,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseRouting();
-// app.UseHttpsRedirection();
+app.UseHttpsRedirection();// включаем редирект на HTTPS
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();

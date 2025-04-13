@@ -20,7 +20,7 @@ namespace MacroSocietyAPI.EmailServies
             using (var client = new SmtpClient())
             {
                 await client.ConnectAsync("smtp.yandex.ru", 465, true);
-                await client.AuthenticateAsync("Bastanov116@yandex.ru", "pcacidelvfiqfppx");
+                await client.AuthenticateAsync("Bastanov116@yandex.ru", "bgyfrmvdzusipdfo");
                 await client.SendAsync(emailMessage);
                 await client.DisconnectAsync(true);
             }

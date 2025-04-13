@@ -5,7 +5,7 @@ namespace MacroSocietyAPI.Encryption
 {
     public class AesEncryptionService
     {
-        private static readonly string _key = "bastanov_1234567"; // 16 символов = 128 бит
+        private static readonly string _key = "bastanov_1234567"; // 16 символов 
         private static readonly string _iv = "societyiv_123456";  // 16 символов
 
         public static string Encrypt(string plainText)

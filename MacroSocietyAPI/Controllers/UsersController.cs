@@ -15,7 +15,7 @@ namespace MacroSocietyAPI.Controllers
 {
     [ApiController]
     [Route("api/users")]
-    public class UsersController : Controller
+    public class UsersController : ControllerBase
     {
         private readonly MacroSocietyDbContext _context;
         private readonly EmailService _emailService;
@@ -28,25 +28,21 @@ namespace MacroSocietyAPI.Controllers
             _createVerificationCode = createVerificationCode;
         }
 
-        // Получить пользователя по Id (зашифрованному)
         [HttpGet("{idEncrypted}")]
-        public async Task<ActionResult<string>> GetUserById(string idEncrypted)
+        public async Task<ActionResult<User>> GetUserById(string idEncrypted)
         {
-            if (!int.TryParse(AesEncryptionService.Decrypt(idEncrypted), out int id))
-                return BadRequest("Неверный формат ID");
+            if (!TryDecryptId(idEncrypted, out int id))
+                return BadRequest("Неверный ID");
 
             var user = await _context.Users.FindAsync(id);
             if (user == null)
                 return NotFound();
 
-            string json = JsonSerializer.Serialize(user);
-            string encrypted = AesEncryptionService.Encrypt(json);
-            return Ok(encrypted);
+            return Ok(user);
         }
 
-        // Получить пользователя по имени
         [HttpGet]
-        public async Task<ActionResult<User>> GetUserByLogin(string name)
+        public async Task<ActionResult<User>> GetUserByLogin([FromQuery] string name)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Name == name);
             if (user == null)
@@ -55,126 +51,148 @@ namespace MacroSocietyAPI.Controllers
             return Ok(user);
         }
 
-        // Регистрация пользователя
         [HttpPost("register")]
-        public async Task<ActionResult<string>> RegisterUser([FromBody] string encryptedUserData)
+        public async Task<ActionResult<User>> RegisterUser([FromBody] User user, [FromQuery] string code)
         {
-            string json;
-            try
-            {
-                json = AesEncryptionService.Decrypt(encryptedUserData);
-            }
-            catch
-            {
-                return BadRequest("Ошибка расшифровки");
-            }
-
-            var user = JsonSerializer.Deserialize<User>(json);
-
-            if (user == null)
-                return BadRequest("Некорректные данные пользователя");
-
             if (string.IsNullOrEmpty(user.Email) || string.IsNullOrEmpty(user.Name))
                 return BadRequest("Email и имя обязательны");
 
-            if (await _context.Users.AnyAsync(u => u.Email == user.Email || u.Name == user.Name))
-                return BadRequest(AesEncryptionService.Encrypt("Пользователь уже существует"));
+            var existingUser = await _context.Users.FirstOrDefaultAsync(u =>
+                u.Email == user.Email);
+            if (existingUser != null)
+                return Conflict("Пользователь с таким email уже существует");
 
+            var emailCode = await _context.EmailLoginCodes.FirstOrDefaultAsync(c =>
+                c.Email == user.Email &&
+                c.Code == code &&
+                c.IsUsed == false &&
+                c.ExpiresAt > DateTime.UtcNow);
+
+            if (emailCode == null)
+                return Unauthorized("Неверный или просроченный код");
+
+            emailCode.IsUsed = true;
+            _context.EmailLoginCodes.Update(emailCode);
+
+            user.CreatedAt ??= DateTime.UtcNow;
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
-            string resultJson = JsonSerializer.Serialize(user);
-            string encrypted = AesEncryptionService.Encrypt(resultJson);
-            return Ok(encrypted);
+            var encryptedId = AesEncryptionService.Encrypt(user.Id.ToString());
+            return CreatedAtAction(nameof(GetUserById), new { idEncrypted = encryptedId }, user);
         }
 
-        // Отправить код подтверждения на email
-        [HttpPost("checkemail")]
-        public async Task<ActionResult> SendVerificationCode(string email)
-        {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
-            if (user == null)
-                return NotFound("Пользователь с таким email не найден");
 
-            int verificationCode = _createVerificationCode.RandomInt(6);
-            var codeEntry = new EmailLoginCode
+        [HttpPost("checkemail")]
+        public async Task<IActionResult> SendVerificationCode([FromQuery] string email)
+        {
+            string decryptedEmail;
+            try
             {
-                Email = email,
-                Code = verificationCode.ToString(),
+                decryptedEmail = AesEncryptionService.Decrypt(email);
+            }
+            catch
+            {
+                return BadRequest("Некорректный формат email");
+            }
+
+            // Проверка, зарегистрирован ли уже такой email
+            var exists = await _context.Users.AnyAsync(u => u.Email == decryptedEmail);
+            if (exists)
+                return Conflict("Email уже зарегистрирован");
+
+            // Удалим старые коды (опционально, можно использовать хранимку периодически)
+            await _context.Database.ExecuteSqlRawAsync("EXEC DeleteExpiredLoginCodes");
+
+            int code = _createVerificationCode.RandomInt(6);
+            var entry = new EmailLoginCode
+            {
+                Email = decryptedEmail,
+                Code = code.ToString(),
                 CreatedAt = DateTime.UtcNow,
                 ExpiresAt = DateTime.UtcNow.AddMinutes(5),
                 IsUsed = false
             };
 
-            _context.EmailLoginCodes.Add(codeEntry);
+            _context.EmailLoginCodes.Add(entry);
             await _context.SaveChangesAsync();
 
-            string bodyMessage = $"Проверочный код: {verificationCode}";
-            await _emailService.SendEmailAsync(email, "Подтверждение входа", bodyMessage);
+            await _emailService.SendEmailAsync(decryptedEmail, "Код подтверждения регистрации", $"Ваш код: {code}");
 
-            return Ok("Код отправлен");
+            return Ok("Код подтверждения отправлен на email");
         }
 
-        // Вход с кодом
+
         [HttpPost("login")]
-        public async Task<ActionResult> LoginWithCode(string email, string code)
+        public async Task<IActionResult> LoginWithCode([FromQuery] string email, [FromQuery] string code)
         {
+            string decryptedEmail;
+            try
+            {
+                decryptedEmail = AesEncryptionService.Decrypt(email);
+            }
+            catch
+            {
+                return BadRequest("Некорректный формат email");
+            }
+
             var loginCode = await _context.EmailLoginCodes
-                .Where(c => c.Email == email && c.Code == code && c.IsUsed == false && c.ExpiresAt > DateTime.UtcNow)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(c =>
+                    c.Email == decryptedEmail &&
+                    c.Code == code &&
+                    c.IsUsed == false &&
+                    c.ExpiresAt > DateTime.UtcNow);
 
             if (loginCode == null)
-                return Unauthorized("Неверный код или срок его действия истек");
+                return Unauthorized("Неверный код или срок действия истек");
 
             loginCode.IsUsed = true;
             await _context.SaveChangesAsync();
 
-            return Ok("Вход успешен");
+            return Ok("Вход выполнен");
         }
 
-        // Получить список пользователей (не друзья, не я)
         [HttpGet("allusers")]
-        public async Task<IEnumerable<User>> GetUsers(string myIdEncrypted, string person = "", int chunkIndex = 1, int chunkSize = 10)
+        public async Task<ActionResult<IEnumerable<User>>> GetUsers(
+            [FromQuery] string myIdEncrypted,
+            [FromQuery] string search = "",
+            [FromQuery] int page = 1,
+            [FromQuery] int size = 10)
         {
-            if (!int.TryParse(AesEncryptionService.Decrypt(myIdEncrypted), out int myId))
-                return new List<User>();
+            if (!TryDecryptId(myIdEncrypted, out int myId))
+                return BadRequest("Неверный ID");
 
-            // Список ID друзей пользователя
             var friendIds = await _context.FriendLists
                 .Where(f => f.UserId == myId)
                 .Select(f => f.FriendId)
                 .ToListAsync();
 
-            // Исключаем самого себя и друзей
             var query = _context.Users
                 .Where(u => u.Id != myId && !friendIds.Contains(u.Id));
 
-            if (!string.IsNullOrEmpty(person))
-            {
-                query = query.Where(u => u.Name.Contains(person));
-            }
+            if (!string.IsNullOrEmpty(search))
+                query = query.Where(u => u.Name.Contains(search));
 
-            var result = await query
-                .Skip((chunkIndex - 1) * chunkSize)
-                .Take(chunkSize)
+            var users = await query
+                .Skip((page - 1) * size)
+                .Take(size)
                 .ToListAsync();
 
-            return result;
+            return Ok(users);
         }
 
-        // Обновить информацию о пользователе
         [HttpPut("{idEncrypted}")]
-        public async Task<IActionResult> UpdateProfile(string idEncrypted, User updatedUser)
+        public async Task<IActionResult> UpdateProfile(string idEncrypted, [FromBody] User updated)
         {
-            if (!int.TryParse(AesEncryptionService.Decrypt(idEncrypted), out int id))
-                return BadRequest("Неверный формат ID");
+            if (!TryDecryptId(idEncrypted, out int id))
+                return BadRequest("Неверный ID");
 
             var user = await _context.Users.FindAsync(id);
             if (user == null)
                 return NotFound();
 
-            user.Name = updatedUser.Name;
-            user.Email = updatedUser.Email;
+            user.Name = updated.Name;
+            user.Email = updated.Email;
 
             _context.Users.Update(user);
             await _context.SaveChangesAsync();
@@ -182,12 +200,11 @@ namespace MacroSocietyAPI.Controllers
             return NoContent();
         }
 
-        // Удалить пользователя
         [HttpDelete("{idEncrypted}")]
         public async Task<IActionResult> DeleteUser(string idEncrypted)
         {
-            if (!int.TryParse(AesEncryptionService.Decrypt(idEncrypted), out int id))
-                return BadRequest("Неверный формат ID");
+            if (!TryDecryptId(idEncrypted, out int id))
+                return BadRequest("Неверный ID");
 
             var user = await _context.Users.FindAsync(id);
             if (user == null)
@@ -197,6 +214,21 @@ namespace MacroSocietyAPI.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        // Вспомогательный метод
+        private bool TryDecryptId(string encryptedId, out int id)
+        {
+            try
+            {
+                var decrypted = AesEncryptionService.Decrypt(encryptedId);
+                return int.TryParse(decrypted, out id);
+            }
+            catch
+            {
+                id = 0;
+                return false;
+            }
         }
     }
 }
