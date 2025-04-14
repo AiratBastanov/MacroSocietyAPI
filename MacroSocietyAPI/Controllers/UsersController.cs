@@ -41,16 +41,6 @@ namespace MacroSocietyAPI.Controllers
             return Ok(user);
         }
 
-        [HttpGet]
-        public async Task<ActionResult<User>> GetUserByLogin([FromQuery] string name)
-        {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Name == name);
-            if (user == null)
-                return NotFound("Пользователь не найден");
-
-            return Ok(user);
-        }
-
         [HttpPost("register")]
         public async Task<ActionResult<User>> RegisterUser([FromBody] User user, [FromQuery] string code)
         {
@@ -84,7 +74,7 @@ namespace MacroSocietyAPI.Controllers
 
 
         [HttpPost("checkemail")]
-        public async Task<IActionResult> SendVerificationCode([FromQuery] string email)
+        public async Task<IActionResult> SendVerificationCode([FromQuery] string email, [FromQuery] string state)
         {
             string decryptedEmail;
             try
@@ -98,7 +88,7 @@ namespace MacroSocietyAPI.Controllers
 
             // Проверка, зарегистрирован ли уже такой email
             var exists = await _context.Users.AnyAsync(u => u.Email == decryptedEmail);
-            if (exists)
+            if (exists && state == "register")
                 return Conflict("Email уже зарегистрирован");
 
             // Удалим старые коды (опционально, можно использовать хранимку периодически)
@@ -124,7 +114,7 @@ namespace MacroSocietyAPI.Controllers
 
 
         [HttpPost("login")]
-        public async Task<IActionResult> LoginWithCode([FromQuery] string email, [FromQuery] string code)
+        public async Task<ActionResult<User>> LoginWithCode([FromQuery] string email, [FromQuery] string code)
         {
             string decryptedEmail;
             try
@@ -147,9 +137,13 @@ namespace MacroSocietyAPI.Controllers
                 return Unauthorized("Неверный код или срок действия истек");
 
             loginCode.IsUsed = true;
-            await _context.SaveChangesAsync();
 
-            return Ok("Вход выполнен");
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == decryptedEmail);
+            if (user == null)
+                return NotFound("Пользователь не найден");
+
+            await _context.SaveChangesAsync();
+            return Ok(user); // Возвращаем пользователя
         }
 
         [HttpGet("allusers")]
