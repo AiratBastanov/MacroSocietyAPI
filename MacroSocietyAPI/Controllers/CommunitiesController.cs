@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using MacroSocietyAPI.Models;
 using MacroSocietyAPI.Encryption;
 using System.Text.Json;
+using MacroSocietyAPI.ExtensionMethod;
 
 namespace MacroSocietyAPI.Controllers
 {
