@@ -57,5 +57,22 @@ namespace MacroSocietyAPI.Controllers
             string result = JsonSerializer.Serialize(community);
             return Ok(AesEncryptionService.Encrypt(result));
         }
+
+        [HttpGet("user/{userIdEncrypted}")]
+        public async Task<IActionResult> GetUserCommunities(string userIdEncrypted)
+        {
+            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId))
+                return BadRequest("Неверный ID");
+
+            var communities = await _context.Communities.GetUserCommunitiesAsync(userId);
+            return Ok(communities);
+        }
+
+        [HttpGet("all")]
+        public async Task<IActionResult> GetAllCommunities()
+        {
+            var communities = await _context.Communities.GetAllCommunitiesAsync();
+            return Ok(communities);
+        }
     }
 }

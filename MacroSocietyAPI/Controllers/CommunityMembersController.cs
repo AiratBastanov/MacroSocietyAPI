@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using MacroSocietyAPI.Models;
 using MacroSocietyAPI.Encryption;
 using System.Text.Json;
+using MacroSocietyAPI.ExtensionMethod;
 
 namespace MacroSocietyAPI.Controllers
 {
@@ -59,6 +60,32 @@ namespace MacroSocietyAPI.Controllers
                 .ToList();
 
             return Ok(encryptedUsers);
+        }
+
+        [HttpDelete("leave")]
+        public async Task<IActionResult> LeaveCommunity([FromBody] LeaveCommunityRequest request)
+        {
+            if (request == null || request.UserId <= 0 || request.CommunityId <= 0)
+                return BadRequest("Некорректные данные");
+
+            var success = await _context.CommunityMembers.LeaveCommunityAsync(request.UserId, request.CommunityId);
+            return success ? Ok() : NotFound("Участие в сообществе не найдено");
+        }
+
+        [HttpGet("user/{userIdEncrypted}")]
+        public async Task<IActionResult> GetUserMemberships(string userIdEncrypted)
+        {
+            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId))
+                return BadRequest("Неверный ID");
+
+            var memberships = await _context.CommunityMembers.GetUserMembershipsAsync(userId);
+            return Ok(memberships);
+        }
+
+        public class LeaveCommunityRequest
+        {
+            public int UserId { get; set; }
+            public int CommunityId { get; set; }
         }
     }
 }

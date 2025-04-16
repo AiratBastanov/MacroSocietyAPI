@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using MacroSocietyAPI.Models;
 using MacroSocietyAPI.Encryption;
+using MacroSocietyAPI.ExtensionMethod;
 
 namespace MacroSocietyAPI.Controllers
 {
@@ -33,6 +34,26 @@ namespace MacroSocietyAPI.Controllers
                 .ToListAsync();
 
             return Ok(friendIds.Select(id => AesEncryptionService.Encrypt(id.ToString())));
+        }
+
+        [HttpGet("details/{userIdEncrypted}")]
+        public async Task<IActionResult> GetFriendDetails(string userIdEncrypted)
+        {
+            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId))
+                return BadRequest("Неверный ID");
+
+            var friends = await _context.FriendLists.GetFriendsWithDetailsAsync(userId);
+            return Ok(friends);
+        }
+
+        [HttpGet("mutual")]
+        public async Task<IActionResult> GetMutualFriends([FromQuery] string user1Id, [FromQuery] string user2Id)
+        {
+            if (!IdHelper.TryDecryptId(user1Id, out int u1) || !IdHelper.TryDecryptId(user2Id, out int u2))
+                return BadRequest("Неверные ID");
+
+            var mutual = await _context.FriendLists.GetMutualFriendsAsync(u1, u2);
+            return Ok(mutual);
         }
 
         [HttpDelete]

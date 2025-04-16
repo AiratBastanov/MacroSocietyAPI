@@ -31,7 +31,7 @@ namespace MacroSocietyAPI.Controllers
         [HttpGet("{idEncrypted}")]
         public async Task<ActionResult<User>> GetUserById(string idEncrypted)
         {
-            if (!TryDecryptId(idEncrypted, out int id))
+            if (!IdHelper.TryDecryptId(idEncrypted, out int id))
                 return BadRequest("Неверный ID");
 
             var user = await _context.Users.FindAsync(id);
@@ -153,7 +153,7 @@ namespace MacroSocietyAPI.Controllers
             [FromQuery] int page = 1,
             [FromQuery] int size = 10)
         {
-            if (!TryDecryptId(myIdEncrypted, out int myId))
+            if (!IdHelper.TryDecryptId(myIdEncrypted, out int myId))
                 return BadRequest("Неверный ID");
 
             var friendIds = await _context.FriendLists
@@ -178,7 +178,7 @@ namespace MacroSocietyAPI.Controllers
         [HttpPut("{idEncrypted}")]
         public async Task<IActionResult> UpdateProfile(string idEncrypted, [FromBody] User updated)
         {
-            if (!TryDecryptId(idEncrypted, out int id))
+            if (!IdHelper.TryDecryptId(idEncrypted, out int id))
                 return BadRequest("Неверный ID");
 
             var user = await _context.Users.FindAsync(id);
@@ -197,7 +197,7 @@ namespace MacroSocietyAPI.Controllers
         [HttpDelete("{idEncrypted}")]
         public async Task<IActionResult> DeleteUser(string idEncrypted)
         {
-            if (!TryDecryptId(idEncrypted, out int id))
+            if (!IdHelper.TryDecryptId(idEncrypted, out int id))
                 return BadRequest("Неверный ID");
 
             var user = await _context.Users.FindAsync(id);
@@ -208,21 +208,6 @@ namespace MacroSocietyAPI.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
-        }
-
-        // Вспомогательный метод
-        private bool TryDecryptId(string encryptedId, out int id)
-        {
-            try
-            {
-                var decrypted = AesEncryptionService.Decrypt(encryptedId);
-                return int.TryParse(decrypted, out id);
-            }
-            catch
-            {
-                id = 0;
-                return false;
-            }
         }
     }
 }

@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using MacroSocietyAPI.Models;
 using MacroSocietyAPI.Encryption;
 using System.Text.Json;
+using MacroSocietyAPI.ExtensionMethod;
 
 namespace MacroSocietyAPI.Controllers
 {
@@ -70,6 +71,16 @@ namespace MacroSocietyAPI.Controllers
             await _context.SaveChangesAsync();
 
             return Ok("Сообщение отправлено");
+        }
+
+        [HttpGet("preview/{userIdEncrypted}")]
+        public async Task<IActionResult> GetMessagePreviews(string userIdEncrypted)
+        {
+            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId))
+                return BadRequest("Неверный ID");
+
+            var previews = await _context.Messages.GetLatestMessagesPerChatAsync(userId);
+            return Ok(previews);
         }
     }
 }

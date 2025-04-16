@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using MacroSocietyAPI.Models;
 using MacroSocietyAPI.Encryption;
 using System.Text.Json;
+using MacroSocietyAPI.ExtensionMethod;
 
 namespace MacroSocietyAPI.Controllers
 {
@@ -82,5 +83,14 @@ namespace MacroSocietyAPI.Controllers
             return Ok("Пост и связанные комментарии удалены");
         }
 
+        [HttpGet("user/{userIdEncrypted}")]
+        public async Task<IActionResult> GetUserPosts(string userIdEncrypted)
+        {
+            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId))
+                return BadRequest("Неверный ID");
+
+            var posts = await _context.Posts.GetPostsByUserAsync(userId);
+            return Ok(posts);
+        }
     }
 }
