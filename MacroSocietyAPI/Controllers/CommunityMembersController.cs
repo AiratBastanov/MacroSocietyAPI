@@ -12,6 +12,8 @@ using MacroSocietyAPI.ExtensionMethod;
 
 namespace MacroSocietyAPI.Controllers
 {
+    [ApiController]
+    [Route("api/communitymember")]
     public class CommunityMembersController : Controller
     {
         private readonly MacroSocietyDbContext _context;

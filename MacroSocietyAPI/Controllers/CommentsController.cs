@@ -11,6 +11,8 @@ using System.Text.Json;
 
 namespace MacroSocietyAPI.Controllers
 {
+    [ApiController]
+    [Route("api/comments")]
     public class CommentsController : Controller
     {
         private readonly MacroSocietyDbContext _context;
