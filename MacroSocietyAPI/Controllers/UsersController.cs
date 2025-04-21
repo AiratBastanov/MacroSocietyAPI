@@ -28,10 +28,10 @@ namespace MacroSocietyAPI.Controllers
             _createVerificationCode = createVerificationCode;
         }
 
-        [HttpGet("{idEncrypted}")]
-        public async Task<ActionResult<User>> GetUserById(string idEncrypted)
+        [HttpGet("byid/{userIdEncrypted}")]
+        public async Task<ActionResult<UserDto>> GetUserById(string userIdEncrypted)
         {
-            if (!IdHelper.TryDecryptId(idEncrypted, out int id))
+            if (!IdHelper.TryDecryptId(userIdEncrypted, out int id))
                 return BadRequest("Неверный ID");
 
             var user = await _context.Users.FindAsync(id);
@@ -147,11 +147,7 @@ namespace MacroSocietyAPI.Controllers
         }
 
         [HttpGet("allusers")]
-        public async Task<ActionResult<IEnumerable<User>>> GetUsers(
-            [FromQuery] string myIdEncrypted,
-            [FromQuery] string search = "",
-            [FromQuery] int page = 1,
-            [FromQuery] int size = 10)
+        public async Task<ActionResult<IEnumerable<User>>> GetUsers([FromQuery] string myIdEncrypted)
         {
             if (!IdHelper.TryDecryptId(myIdEncrypted, out int myId))
                 return BadRequest("Неверный ID");
@@ -164,13 +160,7 @@ namespace MacroSocietyAPI.Controllers
             var query = _context.Users
                 .Where(u => u.Id != myId && !friendIds.Contains(u.Id));
 
-            if (!string.IsNullOrEmpty(search))
-                query = query.Where(u => u.Name.Contains(search));
-
-            var users = await query
-                .Skip((page - 1) * size)
-                .Take(size)
-                .ToListAsync();
+            var users = await query.ToListAsync();
 
             return Ok(users);
         }
@@ -192,6 +182,26 @@ namespace MacroSocietyAPI.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        [HttpGet("stats/{userIdEncrypted}")]
+        public async Task<ActionResult<UserStats>> GetUserStats(string userIdEncrypted)
+        {
+            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId))
+                return BadRequest("Неверный ID");
+
+            var friendsCount = await _context.FriendLists.CountAsync(f => f.UserId == userId);
+            var postsCount = await _context.Posts.CountAsync(p => p.UserId == userId);
+            var communitiesCount = await _context.CommunityMembers.CountAsync(cm => cm.UserId == userId);
+
+            var stats = new UserStats
+            {
+                FriendsCount = friendsCount,
+                PostsCount = postsCount,
+                CommunitiesCount = communitiesCount
+            };
+
+            return Ok(stats);
         }
 
         [HttpDelete("{idEncrypted}")]

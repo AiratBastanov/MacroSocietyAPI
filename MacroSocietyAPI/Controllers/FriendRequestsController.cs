@@ -46,17 +46,39 @@ namespace MacroSocietyAPI.Controllers
         }
 
         [HttpGet("incoming/{userIdEncrypted}")]
-        public async Task<ActionResult<IEnumerable<string>>> GetIncoming(string userIdEncrypted)
+        public async Task<ActionResult<IEnumerable<object>>> GetIncoming(string userIdEncrypted)
         {
             if (!int.TryParse(AesEncryptionService.Decrypt(userIdEncrypted), out int userId))
                 return BadRequest("Неверный формат ID");
 
-            var senders = await _context.FriendRequests
+            var requests = await _context.FriendRequests
+                .Include(r => r.Sender)
+                .Include(r => r.Receiver)
                 .Where(r => r.ReceiverId == userId)
-                .Select(r => r.SenderId)
                 .ToListAsync();
 
-            return Ok(senders.Select(id => AesEncryptionService.Encrypt(id.ToString())));
+            var result = requests.Select(r => new
+            {
+                id = r.Id,
+                senderId = AesEncryptionService.Encrypt(r.SenderId.ToString()),
+                receiverId = AesEncryptionService.Encrypt(r.ReceiverId.ToString()),
+                sentAt = r.SentAt,
+                status = r.Status,
+                sender = new
+                {
+                    id = AesEncryptionService.Encrypt(r.Sender.Id.ToString()),
+                    name = r.Sender.Name,
+                    email = r.Sender.Email
+                },
+                receiver = new
+                {
+                    id = AesEncryptionService.Encrypt(r.Receiver.Id.ToString()),
+                    name = r.Receiver.Name,
+                    email = r.Receiver.Email
+                }
+            });
+
+            return Ok(result);
         }
 
         [HttpPost("accept")]
