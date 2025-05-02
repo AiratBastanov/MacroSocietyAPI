@@ -62,8 +62,8 @@ namespace MacroSocietyAPI.Controllers
         [HttpGet("user/{userIdEncrypted}")]
         public async Task<IActionResult> GetUserCommunities(string userIdEncrypted)
         {
-            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId))
-                return BadRequest("Неверный ID");
+            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId, out string error))
+                return BadRequest(error ?? "Неверный ID");
 
             var communities = await _context.Communities.GetUserCommunitiesAsync(userId);
             return Ok(communities);

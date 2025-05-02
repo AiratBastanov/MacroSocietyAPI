@@ -76,8 +76,8 @@ namespace MacroSocietyAPI.Controllers
         [HttpGet("preview/{userIdEncrypted}")]
         public async Task<IActionResult> GetMessagePreviews(string userIdEncrypted)
         {
-            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId))
-                return BadRequest("Неверный ID");
+            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId, out string error))
+                return BadRequest(error ?? "Неверный ID");
 
             var previews = await _context.Messages.GetLatestMessagesPerChatAsync(userId);
             return Ok(previews);

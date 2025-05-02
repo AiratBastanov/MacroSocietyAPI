@@ -10,6 +10,7 @@ using MacroSocietyAPI.EmailServies;
 using MacroSocietyAPI.Randoms;
 using MacroSocietyAPI.Encryption;
 using System.Text.Json;
+using MacroSocietyAPI.ExtensionMethod;
 
 namespace MacroSocietyAPI.Controllers
 {
@@ -31,8 +32,8 @@ namespace MacroSocietyAPI.Controllers
         [HttpGet("byid/{userIdEncrypted}")]
         public async Task<ActionResult<UserDto>> GetUserById(string userIdEncrypted)
         {
-            if (!IdHelper.TryDecryptId(userIdEncrypted, out int id))
-                return BadRequest("Неверный ID");
+            if (!IdHelper.TryDecryptId(userIdEncrypted, out int id, out string error))
+                return BadRequest(error ?? "Неверный ID");
 
             var user = await _context.Users.FindAsync(id);
             if (user == null)
@@ -40,6 +41,17 @@ namespace MacroSocietyAPI.Controllers
 
             return Ok(user);
         }
+
+        /*[HttpGet("byid/{userIdEncrypted}")]
+        public async Task<ActionResult<UserDto>> GetUserById([ModelBinder(BinderType = typeof(DecryptedIdBinder))] DecryptedId userId)
+        {
+            var user = await _context.Users.FindAsync(userId.Value);
+            if (user == null)
+                return NotFound();
+
+            return Ok(user);
+        }*/
+
 
         [HttpPost("register")]
         public async Task<ActionResult<User>> RegisterUser([FromBody] User user, [FromQuery] string code)
@@ -148,9 +160,9 @@ namespace MacroSocietyAPI.Controllers
 
         [HttpGet("allusers")]
         public async Task<ActionResult<IEnumerable<User>>> GetUsers([FromQuery] string myIdEncrypted)
-        {
-            if (!IdHelper.TryDecryptId(myIdEncrypted, out int myId))
-                return BadRequest("Неверный ID");
+        {            
+            if (!IdHelper.TryDecryptId(myIdEncrypted, out int myId, out string error))
+                return BadRequest(error ?? "Неверный ID");
 
             var friendIds = await _context.FriendLists
                 .Where(f => f.UserId == myId)
@@ -168,8 +180,8 @@ namespace MacroSocietyAPI.Controllers
         [HttpPut("{idEncrypted}")]
         public async Task<IActionResult> UpdateProfile(string idEncrypted, [FromBody] User updated)
         {
-            if (!IdHelper.TryDecryptId(idEncrypted, out int id))
-                return BadRequest("Неверный ID");
+            if (!IdHelper.TryDecryptId(idEncrypted, out int id, out string error))
+                return BadRequest(error ?? "Неверный ID");
 
             var user = await _context.Users.FindAsync(id);
             if (user == null)
@@ -187,8 +199,8 @@ namespace MacroSocietyAPI.Controllers
         [HttpGet("stats/{userIdEncrypted}")]
         public async Task<ActionResult<UserStats>> GetUserStats(string userIdEncrypted)
         {
-            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId))
-                return BadRequest("Неверный ID");
+            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId, out string error))
+                return BadRequest(error ?? "Неверный ID");
 
             var friendsCount = await _context.FriendLists.CountAsync(f => f.UserId == userId);
             var postsCount = await _context.Posts.CountAsync(p => p.UserId == userId);
@@ -207,8 +219,8 @@ namespace MacroSocietyAPI.Controllers
         [HttpDelete("{idEncrypted}")]
         public async Task<IActionResult> DeleteUser(string idEncrypted)
         {
-            if (!IdHelper.TryDecryptId(idEncrypted, out int id))
-                return BadRequest("Неверный ID");
+            if (!IdHelper.TryDecryptId(idEncrypted, out int id, out string error))
+                return BadRequest(error ?? "Неверный ID");
 
             var user = await _context.Users.FindAsync(id);
             if (user == null)

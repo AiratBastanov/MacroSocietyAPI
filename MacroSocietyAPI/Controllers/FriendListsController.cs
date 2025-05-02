@@ -39,8 +39,8 @@ namespace MacroSocietyAPI.Controllers
         [HttpGet("details/{userIdEncrypted}")]
         public async Task<IActionResult> GetFriendDetails(string userIdEncrypted)
         {
-            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId))
-                return BadRequest("Неверный ID");
+            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId, out string error))
+                return BadRequest(error ?? "Неверный ID");
 
             var friends = await _context.FriendLists.GetFriendsWithDetailsAsync(userId);
             return Ok(friends);
@@ -49,12 +49,31 @@ namespace MacroSocietyAPI.Controllers
         [HttpGet("mutual")]
         public async Task<IActionResult> GetMutualFriends([FromQuery] string user1Id, [FromQuery] string user2Id)
         {
-            if (!IdHelper.TryDecryptId(user1Id, out int u1) || !IdHelper.TryDecryptId(user2Id, out int u2))
-                return BadRequest("Неверные ID");
+            List<string> errors = new();
+
+            if (!IdHelper.TryDecryptId(user1Id, out int u1, out string error1))
+                errors.Add($"Ошибка в user1Id: {error1 ?? "Неверный ID"}");
+
+            if (!IdHelper.TryDecryptId(user2Id, out int u2, out string error2))
+                errors.Add($"Ошибка в user2Id: {error2 ?? "Неверный ID"}");
+
+            if (errors.Count > 0)
+                return BadRequest(new { Errors = errors });
 
             var mutual = await _context.FriendLists.GetMutualFriendsAsync(u1, u2);
             return Ok(mutual);
         }
+
+        /*[HttpGet("mutual")]
+        public async Task<IActionResult> GetMutualFriends([FromQuery, ModelBinder(BinderType = typeof(DecryptedIdBinder))] DecryptedId user1Id,
+                                                  [FromQuery, ModelBinder(BinderType = typeof(DecryptedIdBinder))] DecryptedId user2Id)
+        {
+            if (!ModelState.IsValid)
+                return ValidationProblem(ModelState);
+
+            var mutual = await _context.FriendLists.GetMutualFriendsAsync(user1Id.Value, user2Id.Value);
+            return Ok(mutual);
+        }*/
 
         [HttpDelete]
         public async Task<IActionResult> RemoveFriend(string userIdEncrypted, string friendIdEncrypted)

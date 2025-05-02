@@ -132,8 +132,8 @@ namespace MacroSocietyAPI.Controllers
         [HttpGet("outgoing/{userIdEncrypted}")]
         public async Task<IActionResult> GetOutgoingRequests(string userIdEncrypted)
         {
-            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId))
-                return BadRequest("Неверный ID");
+            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId, out string error))
+                return BadRequest(error ?? "Неверный ID");
 
             var requests = await _context.FriendRequests.GetOutgoingRequestsAsync(userId);
             return Ok(requests);
@@ -142,8 +142,8 @@ namespace MacroSocietyAPI.Controllers
         [HttpGet("details/incoming/{userIdEncrypted}")]
         public async Task<IActionResult> GetIncomingRequestDetails(string userIdEncrypted)
         {
-            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId))
-                return BadRequest("Неверный ID");
+            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId, out string error))
+                return BadRequest(error ?? "Неверный ID");
 
             var incoming = await _context.FriendRequests.GetIncomingRequestsWithDetailsAsync(userId);
             return Ok(incoming);
