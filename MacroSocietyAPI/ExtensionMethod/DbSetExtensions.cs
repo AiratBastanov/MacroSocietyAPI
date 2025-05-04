@@ -12,10 +12,26 @@
             return await communities.ToListAsync();
         }
 
-        public static async Task<List<Community>> GetUserCommunitiesAsync(this DbSet<Community> communities, int userId)
+        public static async Task<List<CommunityDto>> GetAllCommunitiesExceptUserAsync(this DbSet<Community> communities, int userId)
         {
             return await communities
-                .Where(c => c.CommunityMembers.Any(m => m.UserId == userId))
+                .Include(c => c.CommunityMembers)
+                .Where(c => c.CreatorId != userId)
+                .Select(c => new CommunityDto
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    Description = c.Description,
+                    CreatorId = c.CreatorId,
+                    IsMember = c.CommunityMembers.Any(cm => cm.UserId == userId)
+                })
+                .ToListAsync();
+        }
+
+        public static async Task<List<Community>> GetUserCreatedCommunitiesAsync(this DbSet<Community> communities, int userId)
+        {
+            return await communities
+                .Where(c => c.CreatorId == userId)
                 .ToListAsync();
         }
 
@@ -27,16 +43,21 @@
                 .ToListAsync();
         }
 
-        public static async Task<bool> LeaveCommunityAsync(this DbSet<CommunityMember> members, int userId, int communityId)
+        public static async Task<bool> LeaveCommunityAsync(this DbSet<CommunityMember> members,MacroSocietyDbContext context,int userId,int communityId)
         {
-            var membership = await members.FirstOrDefaultAsync(m => m.UserId == userId && m.CommunityId == communityId);
+            var membership = await members
+                .FirstOrDefaultAsync(m => m.UserId == userId && m.CommunityId == communityId);
+
             if (membership != null)
             {
                 members.Remove(membership);
+                await context.SaveChangesAsync();
                 return true;
             }
+
             return false;
         }
+
 
         public static async Task<List<User>> GetFriendsWithDetailsAsync(this DbSet<FriendList> friends, int userId)
         {

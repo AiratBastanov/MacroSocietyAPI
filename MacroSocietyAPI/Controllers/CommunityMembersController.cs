@@ -24,24 +24,24 @@ namespace MacroSocietyAPI.Controllers
         }
 
         [HttpPost("join")]
-        public async Task<IActionResult> JoinCommunity([FromBody] string encryptedData)
+        public async Task<IActionResult> JoinCommunity([FromQuery] string encryptedUserId, [FromQuery] string encryptedCommunityId)
         {
-            string json;
-            try
+            if (!int.TryParse(AesEncryptionService.Decrypt(encryptedUserId), out int userId) ||
+                !int.TryParse(AesEncryptionService.Decrypt(encryptedCommunityId), out int communityId))
             {
-                json = AesEncryptionService.Decrypt(encryptedData);
-            }
-            catch
-            {
-                return BadRequest("Ошибка расшифровки");
+                return BadRequest("Неверный формат идентификаторов");
             }
 
-            var member = JsonSerializer.Deserialize<CommunityMember>(json);
-            if (member == null || member.UserId <= 0 || member.CommunityId <= 0)
-                return BadRequest("Некорректные данные");
-
-            if (await _context.CommunityMembers.AnyAsync(cm => cm.UserId == member.UserId && cm.CommunityId == member.CommunityId))
+            if (await _context.CommunityMembers.AnyAsync(cm => cm.UserId == userId && cm.CommunityId == communityId))
+            {
                 return BadRequest("Вы уже участник сообщества");
+            }
+
+            var member = new CommunityMember
+            {
+                UserId = userId,
+                CommunityId = communityId,
+            };
 
             _context.CommunityMembers.Add(member);
             await _context.SaveChangesAsync();
@@ -65,13 +65,16 @@ namespace MacroSocietyAPI.Controllers
         }
 
         [HttpDelete("leave")]
-        public async Task<IActionResult> LeaveCommunity([FromBody] LeaveCommunityRequest request)
+        public async Task<IActionResult> LeaveCommunity([FromQuery] string encryptedUserId, [FromQuery] string encryptedCommunityId)
         {
-            if (request == null || request.UserId <= 0 || request.CommunityId <= 0)
-                return BadRequest("Некорректные данные");
+            if (!int.TryParse(AesEncryptionService.Decrypt(encryptedUserId), out int userId) ||
+                !int.TryParse(AesEncryptionService.Decrypt(encryptedCommunityId), out int communityId))
+            {
+                return BadRequest("Неверный формат идентификаторов");
+            }
 
-            var success = await _context.CommunityMembers.LeaveCommunityAsync(request.UserId, request.CommunityId);
-            return success ? Ok() : NotFound("Участие в сообществе не найдено");
+            var success = await _context.CommunityMembers.LeaveCommunityAsync(_context, userId, communityId);
+            return success ? Ok("Успешно отписались") : NotFound("Участие в сообществе не найдено");
         }
 
         [HttpGet("user/{userIdEncrypted}")]
@@ -86,8 +89,8 @@ namespace MacroSocietyAPI.Controllers
 
         public class LeaveCommunityRequest
         {
-            public int UserId { get; set; }
-            public int CommunityId { get; set; }
+            public int userId { get; set; }
+            public int communityId { get; set; }
         }
     }
 }

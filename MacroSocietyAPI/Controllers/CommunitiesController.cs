@@ -38,7 +38,7 @@ namespace MacroSocietyAPI.Controllers
             return Ok(encrypted);
         }
 
-        [HttpPost("subscribe")]
+        /*[HttpPost("subscribe")]
         public async Task<IActionResult> SubscribeToCommunity([FromBody] string encryptedData)
         {
             string json;
@@ -65,7 +65,7 @@ namespace MacroSocietyAPI.Controllers
             await _context.SaveChangesAsync();
 
             return Ok("Подписка успешна");
-        }
+        }*/
 
         [HttpPost("create")]
         public async Task<ActionResult<string>> CreateCommunity([FromBody] CommunityCreateDto dto)
@@ -84,6 +84,13 @@ namespace MacroSocietyAPI.Controllers
             if (string.IsNullOrWhiteSpace(dto.Name))
                 return BadRequest("Название сообщества обязательно");
 
+            // Проверка наличия сообщества с таким названием
+            bool communityExists = await _context.Communities
+                .AnyAsync(c => c.Name.ToLower() == dto.Name.ToLower());
+
+            if (communityExists)
+                return BadRequest("Сообщество с таким названием уже существует");
+
             var community = new Community
             {
                 Name = dto.Name,
@@ -93,6 +100,21 @@ namespace MacroSocietyAPI.Controllers
             };
 
             _context.Communities.Add(community);
+            await _context.SaveChangesAsync();
+
+            _context.Communities.Add(community);
+            await _context.SaveChangesAsync();
+
+            // Добавляем создателя в участники
+            var member = new CommunityMember
+            {
+                CommunityId = community.Id,
+                UserId = creatorId,
+                JoinedAt = DateTime.UtcNow,
+                Role = "Сreator"
+            };
+
+            _context.CommunityMembers.Add(member);
             await _context.SaveChangesAsync();
 
             string encryptedId = AesEncryptionService.Encrypt(community.Id.ToString());
@@ -105,14 +127,17 @@ namespace MacroSocietyAPI.Controllers
             if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId, out string error))
                 return BadRequest(error ?? "Неверный ID");
 
-            var communities = await _context.Communities.GetUserCommunitiesAsync(userId);
+            var communities = await _context.Communities.GetUserCreatedCommunitiesAsync(userId);
             return Ok(communities);
         }
 
-        [HttpGet("all")]
-        public async Task<IActionResult> GetAllCommunities()
+        [HttpGet("all-except-user/{encryptedUserId}")]
+        public async Task<IActionResult> GetAllCommunitiesExceptUser(string encryptedUserId)
         {
-            var communities = await _context.Communities.GetAllCommunitiesAsync();
+            if (!IdHelper.TryDecryptId(encryptedUserId, out int userId, out string error))
+                return BadRequest(error ?? "Неверный ID");
+
+            var communities = await _context.Communities.GetAllCommunitiesExceptUserAsync(userId);
             return Ok(communities);
         }
 
@@ -142,15 +167,26 @@ namespace MacroSocietyAPI.Controllers
                 .Include(c => c.CommunityMembers)
                 .FirstOrDefaultAsync(c => c.Id == communityId);
 
-            if (community == null) return NotFound();
+            if (community == null)
+                return NotFound("Сообщество не найдено");
 
+            // Проверка: есть ли другие участники кроме создателя
+            var otherMembers = community.CommunityMembers
+                .Where(m => m.UserId != community.CreatorId)
+                .ToList();
+
+            if (!otherMembers.Any())
+                return BadRequest("Нет других участников для передачи прав");
+
+            // Определяем самого активного по количеству постов
             var topUserId = community.Posts
+                .Where(p => p.UserId != community.CreatorId)
                 .GroupBy(p => p.UserId)
                 .OrderByDescending(g => g.Count())
                 .Select(g => g.Key)
                 .FirstOrDefault();
 
-            if (topUserId != 0 && topUserId != community.CreatorId)
+            if (topUserId != 0)
             {
                 community.CreatorId = topUserId;
                 await _context.SaveChangesAsync();
