@@ -204,7 +204,7 @@ namespace MacroSocietyAPI.Controllers
 
             var friendsCount = await _context.FriendLists.CountAsync(f => f.UserId == userId);
             var postsCount = await _context.Posts.CountAsync(p => p.UserId == userId);
-            var communitiesCount = await _context.CommunityMembers.CountAsync(cm => cm.UserId == userId);
+            var communitiesCount = await _context.Communities.CountAsync(cm => cm.CreatorId == userId);
 
             var stats = new UserStats
             {
