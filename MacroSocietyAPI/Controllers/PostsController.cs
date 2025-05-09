@@ -25,46 +25,68 @@ namespace MacroSocietyAPI.Controllers
 
         // Получить посты сообщества
         [HttpGet("community/{encryptedCommunityId}")]
-        public async Task<ActionResult<IEnumerable<string>>> GetPosts(string encryptedCommunityId)
+        public async Task<IActionResult> GetPosts(string encryptedCommunityId)
         {
             if (!int.TryParse(AesEncryptionService.Decrypt(encryptedCommunityId), out int communityId))
-                return BadRequest("Неверный формат communityId");
+                return BadRequest(new { error = "Неверный формат communityId" });
 
             var posts = await _context.Posts
                 .Where(p => p.CommunityId == communityId)
                 .Include(p => p.User)
                 .ToListAsync();
 
-            var encryptedPosts = posts.Select(p =>
+            var result = posts.Select(p => new
             {
-                var json = JsonSerializer.Serialize(p);
-                return AesEncryptionService.Encrypt(json);
+                id = AesEncryptionService.Encrypt(p.Id.ToString()),
+                userId = AesEncryptionService.Encrypt(p.UserId.ToString()),
+                communityId = AesEncryptionService.Encrypt((p.CommunityId ?? 0).ToString()),
+                content = p.Content,
+                createdAt = p.CreatedAt?.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+                username = p.User?.Name
             });
 
-            return Ok(encryptedPosts);
+            return new JsonResult(result);
         }
 
         // Добавить пост
         [HttpPost("add")]
-        public async Task<IActionResult> AddPost([FromBody] string encryptedPost)
+        public async Task<IActionResult> AddPost([FromBody] PostDto postDto)
         {
-            string json;
+            if (postDto == null)
+                return BadRequest("Пустой объект");
+
+            int userId, communityId;
+
             try
             {
-                json = AesEncryptionService.Decrypt(encryptedPost);
+                userId = int.Parse(AesEncryptionService.Decrypt(postDto.UserId));
+                communityId = int.Parse(AesEncryptionService.Decrypt(postDto.CommunityId));
             }
             catch
             {
-                return BadRequest("Ошибка расшифровки");
+                return BadRequest("Ошибка расшифровки ID");
             }
 
-            var post = JsonSerializer.Deserialize<Post>(json);
-            if (post == null)
-                return BadRequest("Некорректные данные поста");
+            var utcNow = DateTime.UtcNow;
+
+            var post = new Post
+            {
+                UserId = userId,
+                CommunityId = communityId,
+                Content = postDto.Content,
+                CreatedAt = utcNow
+            };
 
             _context.Posts.Add(post);
             await _context.SaveChangesAsync();
-            return Ok("Пост добавлен");
+
+            var encryptedId = AesEncryptionService.Encrypt(post.Id.ToString());
+
+            return Ok(new
+            {
+                postId = encryptedId,
+                createdAt = utcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'")
+            });
         }
 
         [HttpDelete("{encryptedPostId}")]
