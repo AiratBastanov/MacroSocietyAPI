@@ -30,9 +30,11 @@ namespace MacroSocietyAPI.Controllers
             if (!int.TryParse(AesEncryptionService.Decrypt(encryptedCommunityId), out int communityId))
                 return BadRequest(new { error = "Неверный формат communityId" });
 
+            // Получаем посты, сортируя их по убыванию времени создания
             var posts = await _context.Posts
                 .Where(p => p.CommunityId == communityId)
                 .Include(p => p.User)
+                .OrderByDescending(p => p.CreatedAt) // Сортировка по времени создания
                 .ToListAsync();
 
             var result = posts.Select(p => new
