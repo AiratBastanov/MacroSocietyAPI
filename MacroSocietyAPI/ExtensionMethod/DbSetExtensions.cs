@@ -107,6 +107,7 @@
             return await posts
                 .Where(p => p.UserId == userId)
                 .Include(p => p.Community)
+                .OrderByDescending(p => p.CreatedAt) // Сортировка по времени создания
                 .ToListAsync();
         }
     }

@@ -23,7 +23,7 @@ namespace MacroSocietyAPI.Controllers
             _context = context;
         }
 
-        // Получить посты сообщества
+        // Получить посты сообщества по id сообщества
         [HttpGet("community/{encryptedCommunityId}")]
         public async Task<IActionResult> GetPosts(string encryptedCommunityId)
         {
@@ -42,6 +42,26 @@ namespace MacroSocietyAPI.Controllers
                 id = AesEncryptionService.Encrypt(p.Id.ToString()),
                 userId = AesEncryptionService.Encrypt(p.UserId.ToString()),
                 communityId = AesEncryptionService.Encrypt((p.CommunityId ?? 0).ToString()),
+                content = p.Content,
+                createdAt = p.CreatedAt?.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
+                username = p.User?.Name
+            });
+
+            return new JsonResult(result);
+        }
+
+        // Получить посты сообщества по id сообщества
+        [HttpGet("user/{userIdEncrypted}")]
+        public async Task<IActionResult> GetUserPosts(string userIdEncrypted)
+        {
+            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId, out string error))
+                return BadRequest(error ?? "Неверный ID");
+
+            var posts = await _context.Posts.GetPostsByUserAsync(userId);
+
+            var result = posts.Select(p => new
+            {
+                id = AesEncryptionService.Encrypt(p.Id.ToString()),
                 content = p.Content,
                 createdAt = p.CreatedAt?.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"),
                 username = p.User?.Name
@@ -105,16 +125,6 @@ namespace MacroSocietyAPI.Controllers
             await _context.SaveChangesAsync();
 
             return Ok("Пост и связанные комментарии удалены");
-        }
-
-        [HttpGet("user/{userIdEncrypted}")]
-        public async Task<IActionResult> GetUserPosts(string userIdEncrypted)
-        {
-            if (!IdHelper.TryDecryptId(userIdEncrypted, out int userId, out string error))
-                return BadRequest(error ?? "Неверный ID");
-
-            var posts = await _context.Posts.GetPostsByUserAsync(userId);
-            return Ok(posts);
         }
     }
 }
