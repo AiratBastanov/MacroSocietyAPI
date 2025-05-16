@@ -81,7 +81,7 @@ namespace MacroSocietyAPI.Controllers
             await _context.SaveChangesAsync();
 
             var encryptedId = AesEncryptionService.Encrypt(user.Id.ToString());
-            return CreatedAtAction(nameof(GetUserById), new { idEncrypted = encryptedId }, user);
+            return Ok(user);
         }
 
 
