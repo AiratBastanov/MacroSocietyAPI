@@ -50,7 +50,7 @@ namespace MacroSocietyAPI.Controllers
             return new JsonResult(result);
         }
 
-        // Получить посты сообщества по id сообщества
+        // Получить посты сообщества по id пользователя
         [HttpGet("user/{userIdEncrypted}")]
         public async Task<IActionResult> GetUserPosts(string userIdEncrypted)
         {

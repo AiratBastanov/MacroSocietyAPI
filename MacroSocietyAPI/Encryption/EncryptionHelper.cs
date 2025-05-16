@@ -3,75 +3,66 @@ using System.Text;
 
 namespace MacroSocietyAPI.Encryption
 {
+    using System;
+    using System.Security.Cryptography;
+    using System.Text;
+
     public class AesEncryptionService
     {
         private static readonly string _key = "bastanov_1234567"; // 16 символов
-        private static readonly string _iv = "societyiv_123456";   // 16 символов
+        private static readonly string _iv = "societyiv_123456";  // 16 символов
 
         public static string Encrypt(string plainText)
         {
             using var aes = Aes.Create();
             aes.Key = Encoding.UTF8.GetBytes(_key);
             aes.IV = Encoding.UTF8.GetBytes(_iv);
-            aes.Padding = PaddingMode.PKCS7;
             aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
 
             using var encryptor = aes.CreateEncryptor();
-            byte[] inputBuffer = Encoding.UTF8.GetBytes(plainText);
-            byte[] encrypted = encryptor.TransformFinalBlock(inputBuffer, 0, inputBuffer.Length);
+            byte[] inputBytes = Encoding.UTF8.GetBytes(plainText);
+            byte[] encryptedBytes = encryptor.TransformFinalBlock(inputBytes, 0, inputBytes.Length);
 
-            // Стандартный Base64 с удалением переносов
-            return Convert.ToBase64String(encrypted)
-                .Replace("\r", "")
-                .Replace("\n", "");
+            // URL-safe Base64: заменяем + на -, / на _, убираем =
+            string base64 = Convert.ToBase64String(encryptedBytes)
+                .Replace('+', '-')
+                .Replace('/', '_')
+                .TrimEnd('=');
+
+            return base64;
         }
 
         public static string Decrypt(string encryptedText)
         {
             try
             {
+                // Восстанавливаем стандартный Base64 из URL-safe
+                string base64 = encryptedText
+                    .Replace('-', '+')
+                    .Replace('_', '/');
+
+                // Добавляем padding, если нужно
+                int padding = 4 - (base64.Length % 4);
+                if (padding != 4)
+                    base64 = base64.PadRight(base64.Length + padding, '=');
+
+                byte[] encryptedBytes = Convert.FromBase64String(base64);
+
                 using var aes = Aes.Create();
                 aes.Key = Encoding.UTF8.GetBytes(_key);
                 aes.IV = Encoding.UTF8.GetBytes(_iv);
-                aes.Padding = PaddingMode.PKCS7;
                 aes.Mode = CipherMode.CBC;
+                aes.Padding = PaddingMode.PKCS7;
 
                 using var decryptor = aes.CreateDecryptor();
-                byte[] encryptedBytes = Convert.FromBase64String(FixUrlSafeBase64(encryptedText));
-                byte[] decrypted = decryptor.TransformFinalBlock(encryptedBytes, 0, encryptedBytes.Length);
-
-                return Encoding.UTF8.GetString(decrypted);
+                byte[] decryptedBytes = decryptor.TransformFinalBlock(encryptedBytes, 0, encryptedBytes.Length);
+                return Encoding.UTF8.GetString(decryptedBytes);
             }
-            catch (FormatException ex)
+            catch
             {
-                throw new Exception("Invalid encrypted data format.", ex);
+                return null;
             }
-            catch (CryptographicException ex)
-            {
-                throw new Exception("Decryption failed due to invalid key, IV, or data.", ex);
-            }
-            catch (Exception ex)
-            {
-                throw new Exception("Unexpected error during decryption.", ex);
-            }
-        }
-
-        private static string FixUrlSafeBase64(string input)
-        {
-            if (string.IsNullOrWhiteSpace(input))
-                throw new ArgumentException("Encrypted text is empty.");
-
-            // Заменяем безопасные символы обратно на стандартные
-            string fixedBase64 = input.Replace('-', '+').Replace('_', '/');
-
-            // Добавляем недостающие символы "=" в конец
-            int padding = 4 - (fixedBase64.Length % 4);
-            if (padding != 4)
-            {
-                fixedBase64 = fixedBase64.PadRight(fixedBase64.Length + padding, '=');
-            }
-
-            return fixedBase64;
         }
     }
 }
